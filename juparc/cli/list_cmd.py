@@ -5,7 +5,7 @@ import json
 
 def list_cmd(args, _):
     """list cmd"""
-    print(json.dumps(glob.glob(args.notebooks, recursive=True)))
+    print(json.dumps(sorted(glob.glob(args.notebooks, recursive=True))))
 
 
 def create_subparsers(subparsers):

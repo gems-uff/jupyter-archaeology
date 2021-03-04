@@ -49,6 +49,6 @@ def create_subparsers(subparsers):
         help="List of markdown files"
     )
     markdown_parser.add_argument(
-        "-p", "--pattern", default="\n\n###### <jupat:{}> ######\n\n",
+        "-p", "--pattern", default="\n\n###### <juparc:{}> ######\n\n",
         help="Header to indicate te start of a Markdown cells"
     )

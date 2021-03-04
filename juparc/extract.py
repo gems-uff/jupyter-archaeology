@@ -3,10 +3,25 @@ import os
 import traceback
 import hashlib
 
+from collections import Counter
+
 import nbformat as nbf
 from IPython.core.interactiveshell import InteractiveShell
 
+COUNT_WORDS = ['homework', 'assignment', 'course', 'exercise', 'lesson']
+
+
+def legacy_output_format(outf):
+    """Convert juparc format to format we used in MSR paper"""
+    if outf.startswith("display_data/"):
+        return outf[13:]
+    if outf.startswith("execute_result/"):
+        return outf[15:]
+    return outf
+
+
 def create_default(name=None):
+    """Create Notebook Dict Object"""
     return {
         "name": name,
         "nbformat": 0,
@@ -26,21 +41,27 @@ def create_default(name=None):
         "cells": [],
         "status": "ok",
         "exception": None,
+        "sha1_source": "",
+        "word_counter": {},
     }
 
+
 def create_cell(index=None):
+    """Create Cell Dict Object"""
     return {
         "index": index,
         "cell_type": "<unknown>",
         "execution_count": None,
         "lines": None,
         "output_formats": [],
+        "legacy_output_formats": "",
         "source": None,
         "raw_source": None,
         "python": None,
         "status": [],
         "exception": None,
     }
+
 
 def subfilter(filterlist, prefix):
     if filterlist is None:
@@ -118,7 +139,8 @@ def cell_output_formats(cell):
             yield "stream/{}".format(output.get("name", "other"))
 
 
-def load_cells(lang_tuple, nbrow, cells, include=None, exclude=None, vprint=lambda x: None):
+def load_cells(lang_tuple, nbrow, cells, include=None, exclude=None, vprint=lambda x: None, count_words=None):
+    count_words = count_words or COUNT_WORDS
     language, language_version = lang_tuple
     status = "ok"
     shell = InteractiveShell.instance()
@@ -127,9 +149,12 @@ def load_cells(lang_tuple, nbrow, cells, include=None, exclude=None, vprint=lamb
     cells_info = []
     exec_count = -1
 
+    concat_source = []
+    word_counter = Counter()
+
     for index, cell in enumerate(cells):
         vprint("Loading cell {}".format(index))
-        
+
         cell_exec_count = cell.get("execution_count") or -1
         if isinstance(cell_exec_count, str) and cell_exec_count.isdigit():
             cell_exec_count = int(cell_exec_count)
@@ -142,7 +167,12 @@ def load_cells(lang_tuple, nbrow, cells, include=None, exclude=None, vprint=lamb
             cell_status.add("unknown-version")
 
         try:
-            source = raw_source = cell["source"] = cell["source"] or ""
+            source = raw_source = cell["source"] = cell.get("source", "") or ""
+            concat_source.append(source)
+            lower = cell.source.lower()
+            for word in count_words:
+                if word in lower:
+                    word_counter[word] += 1
             if is_python and cell.get("cell_type") == "code":
                 try:
                     source = shell.input_transformer_manager.transform_cell(raw_source)
@@ -161,11 +191,18 @@ def load_cells(lang_tuple, nbrow, cells, include=None, exclude=None, vprint=lamb
             setcvar("execution_count", cell.get("execution_count"))
             setcvar("lines", cell["source"].count("\n") + 1)
             setcvar("output_formats", output_formats)
+            cellrow["legacy_output_formats"] = ";".join(
+                set(map(legacy_output_format, cellrow["output_formats"]))
+            )
+            concat_source.append(cellrow["legacy_output_formats"])
             setcvar("source", source)
             setcvar("raw_source", raw_source)
             setcvar("python", is_python)
             setcvar("status", list(cell_status))
-            cells_info.append({k: v for k, v in cellrow.items() if not filterout(k, include, exclude)})
+            cells_info.append({
+                k: v for k, v in cellrow.items() 
+                if not filterout(k, include, exclude)
+            })
 
             nbrow["total_cells"] += 1
             if cell.get("cell_type") == "code":
@@ -183,9 +220,19 @@ def load_cells(lang_tuple, nbrow, cells, include=None, exclude=None, vprint=lamb
         except KeyError as err:
             vprint("Error on cell extraction: {}".format(traceback.format_exc()))
             status = "load-format-error"
+
+    lower = nbrow["name"].lower()
+    for word in count_words:
+        if word in lower:
+            word_counter[word] = -word_counter[word] - 1
+
+    concat_str = "<#<cell>#>\n".join(concat_source)
+    nbrow["sha1_source"] = hashlib.sha1(concat_str.encode('utf-8')).hexdigest()
+    nbrow["word_counter"] = word_counter
+
     if nbrow["total_cells"] == 0:
         status = "load-format-error"
-    
+
     nbrow["max_execution_count"] = exec_count
     nbrow["status"] = status
     return cells_info

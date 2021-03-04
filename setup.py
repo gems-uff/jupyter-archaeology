@@ -1,16 +1,16 @@
 from setuptools import setup, find_packages
 
 setup(
-    name='jupat',
+    name='juparc',
     version='1.0.0',
-    url='https://github.com/JoaoFelipe/jupat',
+    url='https://github.com/gems-uff/jupyter-archaeology',
     author='Joao Felipe Pimentel',
     author_email='joaofelipenp@gmail.com',
     description='Jupyter analysis tools',
     packages=find_packages(),
     entry_points={
         "console_scripts": [
-            "jupat = jupat:main"
+            "juparc = juparc:main"
         ]
     },
     install_requires=[

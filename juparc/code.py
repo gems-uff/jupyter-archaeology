@@ -22,6 +22,12 @@ class PathLocalChecker(object):
         """Check if path exists"""
         return os.path.exists(path)
 
+    def iterate_files(self):
+        """Iterate on repository files"""
+        for _root, _sub_folder, files in os.walk(self.base):
+            for name in files:
+                yield name
+
     def is_local(self, module):
         """Check if module is local by checking if its package exists"""
         if module.startswith("."):
@@ -33,6 +39,33 @@ class PathLocalChecker(object):
                 return False
         return True
 
+    def local_possibility(self, module):
+        """Rate how likely the module is local. Maximum = 4"""
+        if self.is_local(module):
+            return 4
+        module = module.replace(".", "/")
+        if not module:
+            return 0
+
+        modes = [
+            [module, 3, "Full match"],
+        ]
+        split = module.split("/", 1)
+        if len(split) > 1:
+            modes.append((split[-1], 2, "all but first 2"))
+        split = module.split("/")
+        if len(split) > 2:
+            modes.append((split[-1], 1, "module name 1"))
+
+        # Check if a folder matchs the module
+        for name in self.iterate_files():
+            for modname, value, _result in modes:
+                if name.endswith(modname):
+                    if len(name) <= len(modname):
+                        return value
+                    if name[-len(modname) - 1] == '/':
+                        return value
+        return 0
 
 class CellVisitor(ast.NodeVisitor):
     """Visit cell ast to extract data"""
@@ -116,7 +149,15 @@ class CellVisitor(ast.NodeVisitor):
 
     def new_module(self, line, type_, name):
         """Insert new module"""
-        self.modules.append((line, type_, name, self.local_checker.is_local(name)))
+        local = self.local_checker.is_local(name)
+        local_possibility = self.local_checker.local_possibility(name)
+        self.modules.append({
+            'line': line,
+            'import_type': type_,
+            'name': name,
+            'local': local,
+            'local_possibility': local_possibility,
+        })
 
     @contextmanager
     def set_scope(self, scope):

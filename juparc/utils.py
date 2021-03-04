@@ -1,4 +1,4 @@
-"""Utility functions for jupat"""
+"""Utility functions for juparc"""
 
 import sys
 

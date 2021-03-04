@@ -37,7 +37,7 @@ def code_features_cmd(args, _):
                 if not args.ignore_ipython:
                     keep.add('ipython')
                     cell['ipython'] = result['ipython']
-            for attr in getattr(args, 'ignore_others', []):
+            for attr in getattr(args, 'ignore_others', []) or []:
                 if attr in cell:
                     del cell[attr]
             if args.keep:

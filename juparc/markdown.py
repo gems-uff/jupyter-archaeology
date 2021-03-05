@@ -3,6 +3,8 @@
 import mistune
 import re
 
+from collections import Counter
+
 from nbconvert.filters.markdown_mistune import MarkdownWithMath
 from langdetect import detect
 from nltk.corpus import stopwords
@@ -33,156 +35,161 @@ LANG_MAP = {
 }
 
 
+def default_markdown_counter(language=None, using_stopwords=None):
+    """Create default markdown counter object"""
+    return {
+        'language': language,
+        'using_stopwords': using_stopwords,
+        'len': 0,
+        'lines': 0,
+        'meaningful_lines': 0,
+        'words': 0,
+        'meaningful_words': 0,
+        'stopwords': 0,
+        'meaningful_stopwords': 0,
+
+        'header': 0,
+        'header_len': 0,
+        'header_lines': 0,
+        'header_words': 0,
+        'header_stopwords': 0,
+
+        'h1': 0,
+        'h1_len': 0,
+        'h1_lines': 0,
+        'h1_words': 0,
+        'h1_stopwords': 0,
+
+        'h2': 0,
+        'h2_len': 0,
+        'h2_lines': 0,
+        'h2_words': 0,
+        'h2_stopwords': 0,
+
+        'h3': 0,
+        'h3_len': 0,
+        'h3_lines': 0,
+        'h3_words': 0,
+        'h3_stopwords': 0,
+
+        'h4': 0,
+        'h4_len': 0,
+        'h4_lines': 0,
+        'h4_words': 0,
+        'h4_stopwords': 0,
+
+        'h5': 0,
+        'h5_len': 0,
+        'h5_lines': 0,
+        'h5_words': 0,
+        'h5_stopwords': 0,
+
+        'h6': 0,
+        'h6_len': 0,
+        'h6_lines': 0,
+        'h6_words': 0,
+        'h6_stopwords': 0,
+
+        'hrule': 0,
+
+        'list': 0,
+        'list_len': 0,
+        'list_lines': 0,
+        'list_items': 0,
+        'list_words': 0,
+        'list_stopwords': 0,
+
+        'table': 0,
+        'table_len': 0,
+        'table_lines': 0,
+        'table_rows': 0,
+        'table_cells': 0,
+        'table_words': 0,
+        'table_stopwords': 0,
+
+        'p': 0,
+        'p_len': 0,
+        'p_lines': 0,
+        'p_words': 0,
+        'p_stopwords': 0,
+
+        'quote': 0,
+        'quote_len': 0,
+        'quote_lines': 0,
+        'quote_words': 0,
+        'quote_stopwords': 0,
+
+        'code': 0,
+        'code_len': 0,
+        'code_lines': 0,
+        'code_words': 0,
+        'code_stopwords': 0,
+
+        'image': 0,
+        'image_len': 0,
+        'image_words': 0,
+        'image_stopwords': 0,
+
+        'link': 0,
+        'link_len': 0,
+        'link_words': 0,
+        'link_stopwords': 0,
+
+        'autolink': 0,
+        'autolink_len': 0,
+        'autolink_words': 0,
+        'autolink_stopwords': 0,
+
+        'codespan': 0,
+        'codespan_len': 0,
+        'codespan_words': 0,
+        'codespan_stopwords': 0,
+
+        'emphasis': 0,
+        'emphasis_len': 0,
+        'emphasis_words': 0,
+        'emphasis_stopwords': 0,
+
+        'double_emphasis': 0,
+        'double_emphasis_len': 0,
+        'double_emphasis_words': 0,
+        'double_emphasis_stopwords': 0,
+
+        'strikethrough': 0,
+        'strikethrough_len': 0,
+        'strikethrough_words': 0,
+        'strikethrough_stopwords': 0,
+
+        'html': 0,
+        'html_len': 0,
+        'html_lines': 0,
+
+        'math': 0,
+        'math_len': 0,
+        'math_words': 0,
+        'math_stopwords': 0,
+
+        'block_math': 0,
+        'block_math_len': 0,
+        'block_math_lines': 0,
+        'block_math_words': 0,
+        'block_math_stopwords': 0,
+
+        'latex': 0,
+        'latex_len': 0,
+        'latex_lines': 0,
+        'latex_words': 0,
+        'latex_stopwords': 0,
+    }
+
+
 class CountRenderer(mistune.Renderer):
     """Parse markdown to extract number of elements"""
 
     def __init__(self, language, stopwords, using_stopwords):
         super().__init__()
         self.stopwords = stopwords
-        self.counter = {
-            'language': language,
-            'using_stopwords': using_stopwords,
-            'len': 0,
-            'lines': 0,
-            'meaningful_lines': 0,
-            'words': 0,
-            'meaningful_words': 0,
-            'stopwords': 0,
-            'meaningful_stopwords': 0,
-
-            'header': 0,
-            'header_len': 0,
-            'header_lines': 0,
-            'header_words': 0,
-            'header_stopwords': 0,
-
-            'h1': 0,
-            'h1_len': 0,
-            'h1_lines': 0,
-            'h1_words': 0,
-            'h1_stopwords': 0,
-
-            'h2': 0,
-            'h2_len': 0,
-            'h2_lines': 0,
-            'h2_words': 0,
-            'h2_stopwords': 0,
-
-            'h3': 0,
-            'h3_len': 0,
-            'h3_lines': 0,
-            'h3_words': 0,
-            'h3_stopwords': 0,
-
-            'h4': 0,
-            'h4_len': 0,
-            'h4_lines': 0,
-            'h4_words': 0,
-            'h4_stopwords': 0,
-
-            'h5': 0,
-            'h5_len': 0,
-            'h5_lines': 0,
-            'h5_words': 0,
-            'h5_stopwords': 0,
-
-            'h6': 0,
-            'h6_len': 0,
-            'h6_lines': 0,
-            'h6_words': 0,
-            'h6_stopwords': 0,
-
-            'hrule': 0,
-
-            'list': 0,
-            'list_len': 0,
-            'list_lines': 0,
-            'list_items': 0,
-            'list_words': 0,
-            'list_stopwords': 0,
-
-            'table': 0,
-            'table_len': 0,
-            'table_lines': 0,
-            'table_rows': 0,
-            'table_cells': 0,
-            'table_words': 0,
-            'table_stopwords': 0,
-
-            'p': 0,
-            'p_len': 0,
-            'p_lines': 0,
-            'p_words': 0,
-            'p_stopwords': 0,
-
-            'quote': 0,
-            'quote_len': 0,
-            'quote_lines': 0,
-            'quote_words': 0,
-            'quote_stopwords': 0,
-
-            'code': 0,
-            'code_len': 0,
-            'code_lines': 0,
-            'code_words': 0,
-            'code_stopwords': 0,
-
-            'image': 0,
-            'image_len': 0,
-            'image_words': 0,
-            'image_stopwords': 0,
-
-            'link': 0,
-            'link_len': 0,
-            'link_words': 0,
-            'link_stopwords': 0,
-
-            'autolink': 0,
-            'autolink_len': 0,
-            'autolink_words': 0,
-            'autolink_stopwords': 0,
-
-            'codespan': 0,
-            'codespan_len': 0,
-            'codespan_words': 0,
-            'codespan_stopwords': 0,
-
-            'emphasis': 0,
-            'emphasis_len': 0,
-            'emphasis_words': 0,
-            'emphasis_stopwords': 0,
-
-            'double_emphasis': 0,
-            'double_emphasis_len': 0,
-            'double_emphasis_words': 0,
-            'double_emphasis_stopwords': 0,
-
-            'strikethrough': 0,
-            'strikethrough_len': 0,
-            'strikethrough_words': 0,
-            'strikethrough_stopwords': 0,
-
-            'html': 0,
-            'html_len': 0,
-            'html_lines': 0,
-
-            'math': 0,
-            'math_len': 0,
-            'math_words': 0,
-            'math_stopwords': 0,
-
-            'block_math': 0,
-            'block_math_len': 0,
-            'block_math_lines': 0,
-            'block_math_words': 0,
-            'block_math_stopwords': 0,
-
-            'latex': 0,
-            'latex_len': 0,
-            'latex_lines': 0,
-            'latex_words': 0,
-            'latex_stopwords': 0,
-        }
+        self.counter = default_markdown_counter(language, using_stopwords)
 
     def count_lines(self, category, value):
         """Count lines from category"""
@@ -379,7 +386,7 @@ def extract_features(text):
 def generate_markdown_cells(notebook, identifier):
     """Generate markdown cells from notebook dict"""
     name = notebook.get('name', 'unknown')
-    for cell in notebook.get('cells', []):
+    for cell in notebook.get('cells', []) or []:
         index = cell.get('index', '?')
         if cell.get('cell_type', 'unknown') == 'markdown':
             yield (
@@ -412,3 +419,27 @@ def split_markdown(markdown, pattern):
         last_pos, last_group, last_name = pos, group, name
 
     return split_blocks
+
+
+def aggregate_markdown(markdown_cells):
+    """Aggregate markdown"""
+    markdown_columns = default_markdown_counter()
+    del markdown_columns['language']
+
+
+    agg_markdown = {col: 0 for col in markdown_columns}
+    agg_markdown['cell_count'] = 0
+    markdown_languages = Counter()
+
+    for cell in markdown_cells:
+        agg_markdown["cell_count"] += 1
+        features = cell.get("features", {})
+        markdown_languages[features.get("language", "unknown")] += 1
+        for column in markdown_columns:
+            agg_markdown[column] += int(features.get(column))
+
+    mc_languages = markdown_languages.most_common()
+    agg_markdown["main_language"] = mc_languages[0][0] if mc_languages else "none"
+    agg_markdown["languages"] = ",".join(str(lang) for lang, _ in mc_languages)
+    agg_markdown["languages_counts"] = ",".join(str(count) for _, count in mc_languages)
+    return agg_markdown

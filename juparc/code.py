@@ -10,6 +10,101 @@ from contextlib import contextmanager
 
 from .utils import to_unicode
 
+AST_CUSTOM = [
+    "import_star", "functions_with_decorators",
+    "classes_with_decorators", "classes_with_bases",
+    "delname", "delattr", "delitem",
+    "assignname", "assignattr", "assignitem",
+    "ipython", "ipython_superset",
+    "ast_statements", "ast_expressions",
+]
+
+AST_SCOPED = [
+    "importfrom", "import", "assign", "delete",
+    "functiondef", "classdef"
+]
+
+AST_MODULES  = [
+    "module", "interactive", "expression", "suite"
+]
+
+AST_STATEMENTS = [
+    "functiondef", "asyncfunctiondef", "classdef", "return",
+    "delete", "assign", "augassign", "annassign", "print",
+    "for", "asyncfor", "while", "if", "with", "asyncwith",
+    "raise", "try", "tryexcept", "tryfinally", "assert",
+    "import", "importfrom", "exec", "global", "nonlocal", "expr",
+    "pass", "break", "continue"
+]
+
+AST_EXPRESSIONS = [
+    "boolop", "binop", "unaryop", "lambda", "ifexp",
+    "dict", "set", "listcomp", "setcomp", "dictcomp", "generatorexp",
+    "await", "yield", "yieldfrom",
+    "compare", "call", "num", "str", "formattedvalue", "joinedstr",
+    "bytes", "nameconstant", "ellipsis", "constant",
+    "attribute", "subscript", "starred", "name", "list", "tuple",
+]
+
+AST_OTHERS = [
+    "load", "store", "del", "augload", "augstore", "param",
+    "slice", "index",
+    "and", "or",
+    "add", "sub", "mult", "matmult", "div", "mod", "pow", "lshift",
+    "rshift", "bitor", "bitxor", "bitand", "floordiv",
+    "invert", "not", "uadd", "usub",
+    "eq", "noteq", "lt", "lte", "gt", "gte", "is", "isnot", "in", "notin",
+    "comprehension", "excepthandler", "arguments", "arg",
+    "keyword", "alias", "withitem",
+]
+
+MODULE_LOCAL = {
+    True: "local",
+    False: "external",
+    "any": "any",
+}
+
+MODULE_TYPES = {
+    "any", "import_from", "import", "load_ext"
+}
+
+FEATURES = [
+    "shadown_ref", "output_ref", "system",
+    "set_next_input", "input_ref",
+    "magic", "run_line_magic", "run_cell_magic",
+    "getoutput", "set_hook"
+]
+
+NAME_SCOPES = ["any", "nonlocal", "local", "class", "global", "main"]
+NAME_CONTEXTS = [
+    "any", "class", "import", "importfrom", "function",
+    "param", "del", "load", "store"
+]
+
+
+def default_ast_features():
+    counter = OrderedDict()
+
+    for nodetype in AST_CUSTOM:
+        counter[nodetype] = 0
+    for nodetype in AST_SCOPED:
+        counter["class_" + nodetype] = 0
+        counter["global_" + nodetype] = 0
+        counter["nonlocal_" + nodetype] = 0
+        counter["local_" + nodetype] = 0
+        counter["total_" + nodetype] = 0
+    for nodetype in AST_MODULES:
+        counter["ast_" + nodetype] = 0
+    for nodetype in AST_STATEMENTS:
+        counter["ast_" + nodetype] = 0
+    for nodetype in AST_EXPRESSIONS:
+        counter["ast_" + nodetype] = 0
+    for nodetype in AST_OTHERS:
+        counter["ast_" + nodetype] = 0
+    #self.counter["------"] = 0
+    counter["ast_others"] = ""
+    return counter
+
 
 class PathLocalChecker(object):
     """Check if module is local by looking at the directory"""
@@ -72,71 +167,10 @@ class CellVisitor(ast.NodeVisitor):
     # pylint: disable=invalid-name
 
     def __init__(self, local_checker):
-        self.counter = OrderedDict()
-        custom = [
-            "import_star", "functions_with_decorators",
-            "classes_with_decorators", "classes_with_bases",
-            "delname", "delattr", "delitem",
-            "assignname", "assignattr", "assignitem",
-            "ipython", "ipython_superset",
-            "ast_statements", "ast_expressions",
-        ]
-        scoped = [
-            "importfrom", "import", "assign", "delete",
-            "functiondef", "classdef"
-        ]
-        modules = [
-            "module", "interactive", "expression", "suite"
-        ]
-        statements = [
-            "functiondef", "asyncfunctiondef", "classdef", "return",
-            "delete", "assign", "augassign", "annassign", "print",
-            "for", "asyncfor", "while", "if", "with", "asyncwith",
-            "raise", "try", "tryexcept", "tryfinally", "assert",
-            "import", "importfrom", "exec", "global", "nonlocal", "expr",
-            "pass", "break", "continue"
-        ]
-        expressions = [
-            "boolop", "binop", "unaryop", "lambda", "ifexp",
-            "dict", "set", "listcomp", "setcomp", "dictcomp", "generatorexp",
-            "await", "yield", "yieldfrom",
-            "compare", "call", "num", "str", "formattedvalue", "joinedstr",
-            "bytes", "nameconstant", "ellipsis", "constant",
-            "attribute", "subscript", "starred", "name", "list", "tuple",
-        ]
-        others = [
-            "load", "store", "del", "augload", "augstore", "param",
-            "slice", "index",
-            "and", "or",
-            "add", "sub", "mult", "matmult", "div", "mod", "pow", "lshift",
-            "rshift", "bitor", "bitxor", "bitand", "floordiv",
-            "invert", "not", "uadd", "usub",
-            "eq", "noteq", "lt", "lte", "gt", "gte", "is", "isnot", "in", "notin",
-            "comprehension", "excepthandler", "arguments", "arg",
-            "keyword", "alias", "withitem",
-        ]
+        self.counter = default_ast_features()
 
-        for nodetype in custom:
-            self.counter[nodetype] = 0
-        for nodetype in scoped:
-            self.counter["class_" + nodetype] = 0
-            self.counter["global_" + nodetype] = 0
-            self.counter["nonlocal_" + nodetype] = 0
-            self.counter["local_" + nodetype] = 0
-            self.counter["total_" + nodetype] = 0
-        for nodetype in modules:
-            self.counter["ast_" + nodetype] = 0
-        for nodetype in statements:
-            self.counter["ast_" + nodetype] = 0
-        for nodetype in expressions:
-            self.counter["ast_" + nodetype] = 0
-        for nodetype in others:
-            self.counter["ast_" + nodetype] = 0
-        #self.counter["------"] = 0
-        self.counter["ast_others"] = ""
-
-        self.statements = set(statements)
-        self.expressions = set(expressions)
+        self.statements = set(AST_STATEMENTS)
+        self.expressions = set(AST_EXPRESSIONS)
 
         self.scope = None
         self.globals = set()
@@ -275,9 +309,9 @@ class CellVisitor(ast.NodeVisitor):
             self.count_simple("classes_with_decorators")
 
         if any(
-            base for base in node.bases
-            if not isinstance(base, ast.Name)
-            or not base.id == "object"
+                base for base in node.bases
+                if not isinstance(base, ast.Name)
+                or not base.id == "object"
         ):
             self.count_simple("classes_with_bases")
 
@@ -379,7 +413,12 @@ class CellVisitor(ast.NodeVisitor):
         split = args[0].s.split()
         name, = split[0:1] or ['']
 
-        self.ipython_features.append((node.lineno, node.col_offset, type_, name))
+        self.ipython_features.append({
+            'line': node.lineno,
+            'column': node.col_offset,
+            'feature_name': type_,
+            'feature_value': name
+        })
 
         if name == "load_ext":
             try:
@@ -400,7 +439,12 @@ class CellVisitor(ast.NodeVisitor):
         else:
             return
         self.count_simple("ipython")
-        self.ipython_features.append((node.lineno, node.col_offset, type_, node.value.id + "[]"))
+        self.ipython_features.append({
+            'line': node.lineno,
+            'column': node.col_offset,
+            'feature_name': type_,
+            'feature_value': node.value.id + "[]"
+        })
 
     def visit_Name(self, node):
         """Collect _, __, ___, _i, _ii, _iii, _0, _1, _i0, _i1, ..., _sh"""
@@ -421,7 +465,12 @@ class CellVisitor(ast.NodeVisitor):
 
         if type_ is not None:
             self.count_simple("ipython")
-            self.ipython_features.append((node.lineno, node.col_offset, type_, node.id))
+            self.ipython_features.append({
+                'line': node.lineno,
+                'column': node.col_offset,
+                'feature_name': type_,
+                'feature_value': node.id
+            })
 
 
 def extract_code_features(text, checker):
@@ -444,7 +493,7 @@ def extract_code_features(text, checker):
 def supressed_extract_code_features(source, checker):
     """Extract code features but suppress syntax errors"""
     try:
-        result =  extract_code_features(source, checker)
+        result = extract_code_features(source, checker)
         names = defaultdict(lambda: defaultdict(Counter))
         for (scope, context), values in result['names'].items():
             names[scope][context] = values
@@ -455,5 +504,146 @@ def supressed_extract_code_features(source, checker):
             'ast': '<SyntaxError>',
             'modules': '<SyntaxError>',
             'ipython': '<SyntaxError>',
-            'names': '<SyntaxError>',      
+            'names': '<SyntaxError>',
         }
+
+
+def aggregate_ast(notebook):
+    """Aggregate ASTs from notebook"""
+    ast_columns = default_ast_features()
+    del ast_columns['ast_others']
+
+    agg_ast = {col: 0 for col in ast_columns}
+    agg_ast["cell_count"] = 0
+    ast_others = []
+
+    for cell in notebook.get('cells', []) or []:
+        if cell.get("cell_type", "unknown") != "code":
+            continue
+        agg_ast["cell_count"] += 1
+        ast_obj = cell.get('ast', {})
+        if ast_obj['ast_others']:
+            ast_others.append(ast_obj['ast_others'])
+        for column in ast_columns:
+            agg_ast[column] += int(ast_obj.get(column))
+
+    agg_ast["ast_others"] = ",".join(ast_others)
+    return agg_ast
+
+
+def aggregate_modules(notebook):
+    """Aggregate Modules from notebook"""
+    temp_agg = {
+        (local + "_" + type_): OrderedDict()
+        for _, local in MODULE_LOCAL.items()
+        for type_ in MODULE_TYPES
+    }
+    temp_agg["index"] = OrderedDict()
+    others = []
+    def add_key(key, module):
+        if key in temp_agg:
+            temp_agg[key][module["name"]] = 1
+        else:
+            others.append("{}:{}".format(key, module["name"]))
+
+    for cell in notebook.get('cells', []) or []:
+        for module in cell.get("modules", []) or []:
+            temp_agg["index"][str(cell["index"])] = 1
+            local = module["local"] or module["local_possibility"] > 0
+
+            key = MODULE_LOCAL[local] + "_" + module["import_type"]
+            add_key(key, module)
+
+            key = MODULE_LOCAL[local] + "_any"
+            add_key(key, module)
+
+            key = "any_" + module["import_type"]
+            add_key(key, module)
+
+            key = "any_any"
+            add_key(key, module)
+
+    agg = {}
+    for attr, elements in temp_agg.items():
+        agg[attr] = ",".join(elements)
+        agg[attr + "_count"] = len(elements)
+
+    agg["others"] = ",".join(others)
+    return agg
+
+
+def aggregate_ipython(notebook):
+    """Aggregate IPython features from notebook"""
+    temp_agg = {
+        col: OrderedDict()
+        for col in FEATURES
+    }
+    temp_agg['any'] = OrderedDict()
+    temp_agg['index'] = OrderedDict()
+    others = []
+    def add_feature(key, feature):
+        if key in temp_agg:
+            temp_agg[key][feature["feature_value"]] = 1
+        else:
+            others.append("{}:{}".format(key, feature["feature_value"]))
+
+    for cell in notebook.get('cells', []) or []:
+        for feature in cell.get("ipython", []) or []:
+            temp_agg["index"][str(cell["index"])] = 1
+            key = feature["feature_name"]
+            add_feature(key, feature)
+
+            key = "any"
+            add_feature(key, feature)
+
+    agg = {}
+    for attr, elements in temp_agg.items():
+        agg[attr] = ",".join(elements)
+        agg[attr + "_count"] = len(elements)
+
+    agg["others"] = ",".join(others)
+    return agg
+
+
+def aggregate_names(notebook):
+    """Aggregate Names from notebook"""
+    temp_agg = {
+        (scope + "_" + context): Counter()
+        for scope in NAME_SCOPES
+        for context in NAME_CONTEXTS
+    }
+    index = OrderedDict()
+    others = []
+    def add_key(key, counts):
+        for name, count in counts.items():
+            if key in temp_agg:
+                temp_agg[key][name] += count
+            else:
+                others.append("{}:{}({})".format(key, name, count))
+
+    for cell in notebook.get('cells', []) or []:
+        for scope, contexts in (cell.get("names", {}) or {}).items():
+            for context, counts in contexts.items():
+                index[str(cell["index"])] = 1
+                key = scope + "_" + context
+                add_key(key, counts)
+
+                key = scope + "_any"
+                add_key(key, counts)
+
+                key = "any_" + context
+                add_key(key, counts)
+
+                key = "any_any"
+                add_key(key, counts)
+
+    agg = {}
+    agg["index"] = ",".join(index)
+    agg["index_count"] = len(index)
+    for attr, elements in temp_agg.items():
+        mc = elements.most_common()
+        agg[attr] = ",".join(str(name) for name, _ in mc)
+        agg[attr + "_counts"] = ",".join(str(count) for _, count in mc)
+
+    agg["others"] = ",".join(others)
+    return agg

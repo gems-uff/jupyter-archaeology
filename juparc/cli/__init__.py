@@ -7,9 +7,11 @@ from . import markdown_features_cmd
 from . import python_cmd
 from . import select_cmd
 from . import code_features_cmd
+from . import aggregate_markdown_cmd
+from . import aggregate_code_cmd
 
 def main():
-    """Julynter Main CLI"""
+    """JupArc Main CLI"""
     parser = argparse.ArgumentParser(description='Jupyter Analysis Tools')
     subparsers = parser.add_subparsers()
     list_cmd.create_subparsers(subparsers)
@@ -20,6 +22,8 @@ def main():
     code_features_cmd.create_subparsers(subparsers)
     python_cmd.create_subparsers(subparsers)
     select_cmd.create_subparsers(subparsers)
+    aggregate_markdown_cmd.create_subparsers(subparsers)
+    aggregate_code_cmd.create_subparsers(subparsers)
 
     args, rest = parser.parse_known_args()
     if not getattr(args, 'func', None):

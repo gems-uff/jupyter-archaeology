@@ -4,13 +4,8 @@ import sys
 from ..extract import load
 from ..markdown import generate_markdown_cells, split_markdown, extract_features
 
-def markdown_features_cmd(args, _):
-    """markdown features cmd"""
-    markdown = ""
-    if not args.notebooks and not args.markdowns:
-        lines = list(sys.stdin)
-        markdown = "".join(lines)
-
+def extract_features_from_args(markdown, args):
+    """extract markdown features according to args"""
     if args.notebooks:
         markdown_l = []
         for notebook in args.notebooks:
@@ -30,6 +25,16 @@ def markdown_features_cmd(args, _):
     blocks = split_markdown(markdown, args.pattern)
     for block in blocks:
         block['features'] = extract_features(block['code'])
+    return blocks
+
+def markdown_features_cmd(args, _):
+    """markdown features cmd"""
+    markdown = ""
+    if not args.notebooks and not args.markdowns:
+        lines = list(sys.stdin)
+        markdown = "".join(lines)
+
+    blocks = extract_features_from_args(markdown, args)
     print(json.dumps(blocks, indent=2))
 
 

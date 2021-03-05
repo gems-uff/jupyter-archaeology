@@ -6,14 +6,8 @@ from ..extract import load, create_cell
 from ..code import supressed_extract_code_features, PathLocalChecker
 
 
-def code_features_cmd(args, _):
-    """code features cmd"""
-    if not args.notebooks:
-        lines = list(sys.stdin)
-        notebooks = json.loads("\n".join(lines))
-    else:
-        notebooks = [load(notebook) for notebook in args.notebooks]
-
+def enrich_notebooks(notebooks, args):
+    """enrich notebooks with features"""
     keep = set()
     if args.keep:
         keep = set(args.keep)
@@ -44,6 +38,16 @@ def code_features_cmd(args, _):
                 for attr in create_cell():
                     if attr not in keep and attr in cell:
                         del cell[attr]
+
+def code_features_cmd(args, _):
+    """code features cmd"""
+    if not args.notebooks:
+        lines = list(sys.stdin)
+        notebooks = json.loads("\n".join(lines))
+    else:
+        notebooks = [load(notebook) for notebook in args.notebooks]
+
+    enrich_notebooks(notebooks, args)
     print(json.dumps(notebooks, indent=2))
 
 

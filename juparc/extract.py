@@ -1,10 +1,13 @@
 """Extract operation: extract notebooks"""
-import os
-import traceback
 import hashlib
+import os
+import re
+import traceback
 
 from collections import Counter
 
+import numba
+import numpy
 import nbformat as nbf
 from IPython.core.interactiveshell import InteractiveShell
 
@@ -43,6 +46,21 @@ def create_default(name=None):
         "exception": None,
         "sha1_source": "",
         "word_counter": {},
+
+        "unambiguous": None,
+        "actual_empty_cells": -1,
+        "non_executed_cells": 0,
+        "empty_cells_middle": 0,
+        "empty_cells_end": 0,
+        "numeric_counts_total": 0,
+        "numeric_set_total": 0,
+        "processing_cells": 0,
+        "unordered": None,
+        "execution_skips_total": 0,
+        "execution_skips_size": 0,
+        "execution_skips_middle_total": 0,
+        "execution_skips_middle_size": 0,
+
     }
 
 
@@ -112,7 +130,7 @@ def sha1_hash(path):
                 break
             sha1.update(data)
     return sha1.hexdigest()
- 
+
 
 def set_kernel_language(metadata, setvar):
     """Extract kernel and language from notebook metadata"""
@@ -139,6 +157,80 @@ def cell_output_formats(cell):
             yield "stream/{}".format(output.get("name", "other"))
 
 
+def int_or_none(value):
+    """Returns int if the value can be converted to int or None, otherwise"""
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def count_middle_empty(arr):
+    while arr and arr[-1] == 'empty':
+        arr = arr[:-1]
+    return arr.count('empty')
+
+
+def select_numbers(arr):
+    for count in arr:
+        try:
+            yield int(count)
+        except (TypeError, ValueError):
+            pass
+
+
+@numba.jit("i8(i8[:])")
+def count_skips(arr):
+    last = 0
+    current = -10000
+    skips = 0
+    for element in arr:
+        current = element
+        if current - last > 1:
+            skips += 1
+        last = current
+    return skips
+
+
+@numba.jit("i8(i8[:])")
+def count_skips_sizes(arr):
+    last = 0
+    current = -10000
+    skips = 0
+    for element in arr:
+        current = element
+        if current != last:
+            skips += current - last - 1
+        last = current
+    return skips
+
+
+@numba.jit("i8(i8[:])")
+def count_skips_middle(arr):
+    last = -10000
+    current = -10000
+    skips = 0
+    for element in arr:
+        current = element
+        if last != -10000 and current - last > 1:
+            skips += 1
+        last = current
+    return skips
+
+
+@numba.jit("i8(i8[:])")
+def count_skips_sizes_middle(arr):
+    last = -10000
+    current = -10000
+    skips = 0
+    for element in arr:
+        current = element
+        if last != -10000 and current != last:
+            skips += current - last - 1
+        last = current
+    return skips
+
+
 def load_cells(lang_tuple, nbrow, cells, include=None, exclude=None, vprint=lambda x: None, count_words=None):
     count_words = count_words or COUNT_WORDS
     language, language_version = lang_tuple
@@ -152,14 +244,17 @@ def load_cells(lang_tuple, nbrow, cells, include=None, exclude=None, vprint=lamb
     concat_source = []
     word_counter = Counter()
 
+    unfiltered = []
+    execution_counts = []
+
     for index, cell in enumerate(cells):
         vprint("Loading cell {}".format(index))
 
-        cell_exec_count = cell.get("execution_count") or -1
-        if isinstance(cell_exec_count, str) and cell_exec_count.isdigit():
-            cell_exec_count = int(cell_exec_count)
-        if isinstance(cell_exec_count, int):
-            exec_count = max(exec_count, cell_exec_count)
+        cell_exec_count = cell.get("execution_count")
+        cell_exec_count_int = int_or_none(cell_exec_count)
+        if cell_exec_count_int is not None:
+            exec_count = max(exec_count, cell_exec_count_int)
+
         output_formats = list(cell_output_formats(cell))
 
         cell_status = set()
@@ -188,7 +283,7 @@ def load_cells(lang_tuple, nbrow, cells, include=None, exclude=None, vprint=lamb
             cellrow = create_cell(index)
             setcvar = prepare_setvar(cellrow, include, exclude)
             setcvar("cell_type", cell.get("cell_type", "<unknown>"))
-            setcvar("execution_count", cell.get("execution_count"))
+            setcvar("execution_count", cell_exec_count)
             setcvar("lines", cell["source"].count("\n") + 1)
             setcvar("output_formats", output_formats)
             cellrow["legacy_output_formats"] = ";".join(
@@ -200,12 +295,18 @@ def load_cells(lang_tuple, nbrow, cells, include=None, exclude=None, vprint=lamb
             setcvar("python", is_python)
             setcvar("status", list(cell_status))
             cells_info.append({
-                k: v for k, v in cellrow.items() 
+                k: v for k, v in cellrow.items()
                 if not filterout(k, include, exclude)
             })
 
             nbrow["total_cells"] += 1
             if cell.get("cell_type") == "code":
+                if re.sub(r'[\n\r]+', ' ', source).strip() == '':
+                    execution_counts.append("empty")
+                else:
+                    execution_counts.append(cell_exec_count_int)
+                if cell_exec_count_int is not None:
+                    unfiltered.append(cell_exec_count_int)
                 nbrow["code_cells"] += 1
                 if output_formats:
                     nbrow["code_cells_with_output"] += 1
@@ -235,6 +336,28 @@ def load_cells(lang_tuple, nbrow, cells, include=None, exclude=None, vprint=lamb
 
     nbrow["max_execution_count"] = exec_count
     nbrow["status"] = status
+
+
+    numbers = set(unfiltered)
+    nbrow["unambiguous"] = unfiltered and len(numbers) == len(unfiltered)
+
+    numeric_counts = list(select_numbers(execution_counts))
+    numeric_sorted = sorted(numeric_counts)
+    numpy_sorted = numpy.array(numeric_sorted, dtype=int)
+
+    nbrow["actual_empty_cells"] = execution_counts.count('empty')
+    nbrow["non_executed_cells"] = execution_counts.count(None)
+    nbrow["empty_cells_middle"] = count_middle_empty(execution_counts)
+    nbrow["empty_cells_end"] = nbrow["actual_empty_cells"] - nbrow["empty_cells_middle"]
+    nbrow["numeric_counts_total"] = len(numeric_counts)
+    nbrow["numeric_set_total"] = len(set(numeric_counts))
+    nbrow["processing_cells"] = execution_counts.count('*')
+    nbrow["unordered"] = numeric_counts != numeric_sorted
+    nbrow["execution_skips_total"] = count_skips(numpy_sorted)
+    nbrow["execution_skips_size"] = count_skips_sizes(numpy_sorted)
+    nbrow["execution_skips_middle_total"] = count_skips_middle(numpy_sorted)
+    nbrow["execution_skips_middle_size"] = count_skips_sizes_middle(numpy_sorted)
+
     return cells_info
 
 

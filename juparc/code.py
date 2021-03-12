@@ -43,7 +43,7 @@ AST_EXPRESSIONS = [
     "await", "yield", "yieldfrom",
     "compare", "call", "num", "str", "formattedvalue", "joinedstr",
     "bytes", "nameconstant", "ellipsis", "constant",
-    "attribute", "subscript", "starred", "name", "list", "tuple",
+    "attribute", "subscript", "starred", "name", "list", "tuple", "repr",
 ]
 
 AST_OTHERS = [
@@ -55,7 +55,7 @@ AST_OTHERS = [
     "invert", "not", "uadd", "usub",
     "eq", "noteq", "lt", "lte", "gt", "gte", "is", "isnot", "in", "notin",
     "comprehension", "excepthandler", "arguments", "arg",
-    "keyword", "alias", "withitem",
+    "keyword", "alias", "withitem", "extslice",
 ]
 
 MODULE_LOCAL = {
